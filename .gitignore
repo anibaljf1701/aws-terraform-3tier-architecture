@@ -41,3 +41,7 @@ logs/
 
 # Kiro configuration
 .kiro/
+
+# Local documentation (not for repository)
+docs/
+docs/*
