@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "terraform-best-practices": {
+      "command": "uvx",
+      "args": ["mcp-terraform-best-practices@latest"],
+      "env": {
+        "TERRAFORM_LOG_LEVEL": "INFO"
+      },
+      "disabled": false
+    },
+    "aws-best-practices": {
+      "command": "uvx", 
+      "args": ["mcp-aws-best-practices@latest"],
+      "env": {
+        "AWS_REGION": "us-west-2"
+      },
+      "disabled": false
+    },
+    "infrastructure-diagrams": {
+      "command": "uvx",
+      "args": ["mcp-infrastructure-diagrams@latest"],
+      "env": {
+        "DIAGRAM_FORMAT": "mermaid"
+      },
+      "disabled": false
+    },
+    "aws-documentation": {
+      "command": "uvx",
+      "args": ["awslabs.aws-documentation-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "disabled": false
+    }
+  }
+}

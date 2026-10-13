@@ -1,4 +1,43 @@
+# Terraform files
 .terraform/
 .tfstate
 .tfstate.backup
 .tfvars
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Local backend state (for development)
+terraform.tfstate
+terraform.tfstate.backup
+
+# Sensitive data
+*.pem
+*.key
+*.cert
+.env
+secrets.*
+*.secret
+
+# Logs
+*.log
+logs/
+
+# Kiro configuration
+.kiro/
