@@ -15,3 +15,15 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "db_name" {
+  description = "Name of the RDS database"
+  type        = string
+  default     = "portfoliodb"
+}
+
+variable "db_username" {
+  description = "Admin username for the RDS database"
+  type        = string
+  default     = "admin"
+}
