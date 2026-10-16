@@ -8,8 +8,8 @@ La configuración predeterminada utiliza la región `us-west-2` y dos zonas de d
 
 - **Red:** VPC `10.0.0.0/16`, dos subredes públicas, dos subredes privadas para la aplicación y dos subredes privadas para la base de datos.
 - **Entrada y salida:** un Internet Gateway, un Application Load Balancer (ALB) en las subredes públicas y un NAT Gateway para el tráfico saliente de las subredes privadas.
-- **Aplicación:** un Auto Scaling Group en las subredes privadas, con capacidad deseada de dos instancias EC2 y límites de una a tres. Las instancias ejecutan Apache HTTP.
-- **Datos:** una instancia Amazon RDS MySQL 8.0, no accesible públicamente. La configuración actual no habilita despliegue Multi-AZ.
+- **Aplicación:** un Auto Scaling Group en las subredes privadas, con capacidad inicial deseada de dos instancias EC2 y límites predeterminados de una a tres. El grupo reemplaza instancias que el ALB marque como no saludables y escala según un objetivo predeterminado de CPU promedio del 60 %. Las instancias ejecutan Apache HTTP, requieren IMDSv2 y usan volúmenes raíz cifrados.
+- **Datos:** una instancia Amazon RDS MySQL 8.0, no accesible públicamente. La capa de aplicación accede a MySQL mediante su security group. La configuración actual no habilita despliegue Multi-AZ.
 
 El tráfico web sigue el recorrido `Internet → ALB → EC2 → RDS`. Las instancias EC2 utilizan el NAT Gateway para las conexiones salientes.
 
@@ -49,7 +49,15 @@ aws-terraform-3tier-architecture/
 | Variable | Descripción | Tipo | Valor por Defecto |
 |----------|-------------|------|-------------------|
 | `aws_region` | Región de AWS | `string` | `us-west-2` |
+| `project_name` | Identificador usado en nombres de recursos de cómputo | `string` | `portfolio` |
+| `environment` | Nombre del entorno de despliegue | `string` | `dev` |
+| `common_tags` | Tags adicionales para recursos de cómputo | `map(string)` | `{}` |
 | `private_app_subnet_cidr` | Rangos CIDR de las subredes privadas de aplicación | `list(string)` | `["10.0.11.0/24", "10.0.12.0/24"]` |
+| `instance_type` | Tipo de instancia EC2 | `string` | `t2.micro` |
+| `asg_min_size` | Cantidad mínima de instancias de aplicación | `number` | `1` |
+| `asg_desired_capacity` | Capacidad inicial deseada | `number` | `2` |
+| `asg_max_size` | Cantidad máxima de instancias de aplicación | `number` | `3` |
+| `asg_cpu_target_value` | Objetivo de CPU promedio para escalado | `number` | `60` |
 | `db_password` | Contraseña de la base de datos | `string` | Requerida, sensible |
 | `db_name` | Nombre de la base de datos | `string` | `portfoliodb` |
 | `db_username` | Usuario administrador de la base de datos | `string` | `admin` |
@@ -60,10 +68,10 @@ aws-terraform-3tier-architecture/
 Crea la VPC, subredes públicas y privadas en dos zonas, gateways, tablas de rutas y el grupo de subredes de RDS.
 
 ### 2. Módulo EC2 Cluster (`modules/ec2_cluster`)
-Implementa el ALB, sus reglas de acceso, un Auto Scaling Group con Launch Template y las instancias EC2 con Amazon Linux 2023 y Apache HTTP.
+Implementa el ALB, sus reglas de acceso, un Auto Scaling Group con escalado por CPU y salud integrada con el ALB, y las instancias EC2 con Amazon Linux 2023 y Apache HTTP. El módulo acepta parámetros para proyecto, entorno, tags, tipo de instancia y capacidad.
 
 ### 3. Módulo RDS Database (`modules/rds_database`)
-Implementa una instancia RDS MySQL 8.0 no pública y un grupo de seguridad que permite conexiones desde los rangos CIDR de las subredes de aplicación.
+Implementa una instancia RDS MySQL 8.0 no pública y un grupo de seguridad que permite conexiones desde el grupo de seguridad de la capa de aplicación.
 
 ## Uso
 
@@ -97,7 +105,7 @@ terraform destroy
 
 ## Acceso y conectividad
 
-El ALB acepta tráfico HTTP por el puerto 80. Las instancias EC2 reciben tráfico HTTP desde el grupo de seguridad del ALB y la base de datos acepta conexiones MySQL desde los rangos de las subredes de aplicación. La contraseña de la base de datos se declara como variable sensible de Terraform.
+El ALB acepta tráfico HTTP por el puerto 80 y las instancias EC2 reciben tráfico HTTP solo desde el grupo de seguridad del ALB. Para mantener este template simple, la salida de los security groups del ALB y de EC2 permite todos los destinos; en un despliegue con destinos definidos, restringe esas reglas al mínimo necesario. La base de datos acepta conexiones MySQL desde el grupo de seguridad de EC2. La contraseña se declara como variable sensible de Terraform.
 
 ## Costos
 
@@ -107,7 +115,7 @@ El coste depende de la región, el tiempo de ejecución, el tráfico y los preci
 
 Para cambiar la región, define `aws_region` en un archivo de variables local o mediante `TF_VAR_aws_region`.
 
-Para ajustar los tipos de instancia EC2 o RDS, modifica `instance_type` en `modules/ec2_cluster/main.tf` o `instance_class` en `modules/rds_database/main.tf`.
+Para ajustar el tipo de instancia EC2, define `instance_type`. Los valores de escalado de la aplicación se configuran con `asg_min_size`, `asg_desired_capacity`, `asg_max_size` y `asg_cpu_target_value`. El tipo de instancia RDS se modifica en `modules/rds_database/main.tf`.
 
 Si agregas subredes de aplicación, actualiza también las zonas de disponibilidad en `modules/vpc/variables.tf` para que ambas listas tengan la misma longitud.
 
@@ -126,4 +134,4 @@ aws sts get-caller-identity
 
 ## Nota
 
-Este repositorio es una demostración técnica. Antes de utilizarlo en un entorno real, revisa los requisitos de disponibilidad, cifrado, copias de seguridad, monitoreo y acceso de la aplicación. La configuración actual sirve HTTP, usa un único NAT Gateway y no habilita RDS Multi-AZ; los costes reales dependen del uso y de los precios vigentes de AWS.
+Este repositorio es un template demostrativo. Antes de utilizarlo en un entorno productivo, configura HTTPS en el ALB con un certificado ACM y redirige HTTP a HTTPS. Revisa también los requisitos de disponibilidad, copias de seguridad, monitoreo y acceso de la aplicación. La configuración actual usa un único NAT Gateway y no habilita RDS Multi-AZ; los costes reales dependen del uso y de los precios vigentes de AWS.

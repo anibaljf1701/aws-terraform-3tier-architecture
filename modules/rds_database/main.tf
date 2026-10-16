@@ -5,11 +5,11 @@ resource "aws_security_group" "rds_sg" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "Allow inbound traffic from the app layer to RDS database on port 3306"
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = var.app_subnets_cidr # Only IPs from the EC2, can be used to access the RDS database
+    description     = "Allow inbound traffic from the app layer to RDS database on port 3306"
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [var.app_security_group_id]
   }
 
   egress {
@@ -27,27 +27,27 @@ resource "aws_security_group" "rds_sg" {
 
 # 2. Instance RDS MySQL
 resource "aws_db_instance" "main" {
-    identifier              = "portfolio-db-instance"
-    engine                  = "mysql"
-    engine_version          = "8.0"
-    instance_class          = "db.t3.micro"
-    allocated_storage       = 20
+  identifier        = "portfolio-db-instance"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
 
-    db_name                 = var.db_name
-    username                = var.db_username
-    password                = var.db_password
+  db_name  = var.db_name
+  username = var.db_username
+  password = var.db_password
 
-    db_subnet_group_name    = var.db_subnet_group_name
-    vpc_security_group_ids  = [aws_security_group.rds_sg.id]
+  db_subnet_group_name   = var.db_subnet_group_name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
 
-    # Security configuration
-    publicly_accessible     = false
-    skip_final_snapshot     = true
-    apply_immediately         = true
+  # Security configuration
+  publicly_accessible = false
+  skip_final_snapshot = true
+  apply_immediately   = true
 
-    tags = {
-        Name = "portfolio-rds-mysql"
-    }
+  tags = {
+    Name = "portfolio-rds-mysql"
+  }
 }
 
 

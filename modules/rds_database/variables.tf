@@ -8,9 +8,9 @@ variable "db_subnet_group_name" {
   type        = string
 }
 
-variable "app_subnets_cidr" {
-  description = "The CIDR blocks of the layer app for permitting traffic inbound to port 3306"
-  type        = list(string)
+variable "app_security_group_id" {
+  description = "Security group ID of the application tier allowed to connect to MySQL"
+  type        = string
 }
 
 variable "db_name" {
