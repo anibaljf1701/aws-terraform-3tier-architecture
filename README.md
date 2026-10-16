@@ -23,6 +23,8 @@ aws-terraform-3tier-architecture/
 ├── providers.tf            # Configuración de proveedores
 ├── backend.tf              # Configuración de backend (estado Terraform)
 ├── README.md               # Documentación del proyecto
+├── ministack/               # Imagen local del emulador AWS Ministack
+│   └── Dockerfile
 └── modules/                # Módulos de infraestructura
     ├── vpc/                # Módulo de VPC y red
     │   ├── main.tf
@@ -76,6 +78,12 @@ Implementa el ALB, sus reglas de acceso, un Auto Scaling Group con escalado por 
 
 ### 3. Módulo RDS Database (`modules/rds_database`)
 Implementa una instancia RDS MySQL 8.0 no pública y un grupo de seguridad que permite conexiones desde el grupo de seguridad de la capa de aplicación.
+
+## Entorno local con Ministack
+
+El directorio `ministack/` contiene un Dockerfile derivado de la imagen oficial `ministackorg/ministack:1.5.28`. La imagen conserva el arranque del proveedor, expone el gateway en el puerto `4566` y comprueba su estado mediante `/_ministack/health`. La versión queda fijada para que las pruebas locales sean reproducibles.
+
+Ministack se utilizará para validar la integración de Terraform con las APIs emuladas y para disponer de una base MySQL real en un contenedor. No reproduce el enrutamiento real de VPC, NAT ni security groups; EC2 es metadata-only salvo que se registre una imagen de contenedor, el Auto Scaling no ejecuta políticas y las comprobaciones de salud del ALB no se ejecutan. Para que RDS levante su contenedor de base de datos, el servicio deberá recibir acceso al socket Docker en tiempo de ejecución; ese permiso no se incorpora al Dockerfile. El procedimiento de build, inicio y prueba local se documentará por separado.
 
 ## Uso
 
