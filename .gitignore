@@ -1,47 +1,37 @@
-# Terraform files
+# Terraform local data and plans
 .terraform/
-.tfstate
-.tfstate.backup
-.tfvars
-.terraform.lock.hcl
-terraform.tfstate
-terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
 *.tfvars
+*.tfvars.json
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
-# IDE and editor files
+# Local credentials and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+secrets.*
+*.secret
+
+# IDE and editor settings
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS files
+# Operating system files
 .DS_Store
 Thumbs.db
 
-# Temporary files
-*.tmp
-*.temp
-
-# Local backend state (for development)
-terraform.tfstate
-terraform.tfstate.backup
-
-# Sensitive data
-*.pem
-*.key
-*.cert
-.env
-secrets.*
-*.secret
-
-# Logs
-*.log
-logs/
-
-# Kiro configuration
-.kiro/
-
-# Local documentation (not for repository)
+# Local documentation and examples
 docs/
-docs/*
