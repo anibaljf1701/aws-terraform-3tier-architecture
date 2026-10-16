@@ -185,19 +185,6 @@ flowchart TB
   class MYSQL real
 ```
 
-### Resultado observado
-
-En la ejecución local de referencia, el state llegó a contener 29 recursos y el apply final informó `No changes` (`0 added, 0 changed, 0 destroyed`). Incluye VPC, subredes, tablas y asociaciones de rutas, security groups, ALB/target group/listener, launch template, ASG, política de escalado, DB subnet group y RDS. El endpoint informado fue `127.0.0.1:15432`, cuyo puerto TCP aceptó conexiones; la consulta al contenedor MySQL devolvió `localdb`, versión `8.0.46` y `1`.
-
-### Salvedades de la emulación
-
-- La VPC, subredes, NAT, rutas y security groups son recursos de control plane: Ministack no enruta paquetes ni hace cumplir las reglas de red.
-- EC2 y el ASG son metadata-only en esta configuración. Se usa `ami-00000001` solo para que el Launch Template pueda crearse; no se inicia una VM ni se ejecuta el user data.
-- El Auto Scaling API de Ministack no implementa `AttachLoadBalancerTargetGroups`; por eso `attach_target_group_arns = false` solo en el harness local. El ALB y el listener se crean, pero no hay target registrado ni flujo ALB→EC2 que probar. No se validó una respuesta HTTP funcional del ALB. Las comprobaciones de salud no se ejecutan y las políticas de escalado quedan almacenadas, no disparadas.
-- RDS sí inicia un MySQL real, pero Ministack no devolvió `master_user_secret` al usar `manage_master_user_password = true`; por eso el ARN del secreto no aparece en los outputs locales. La prueba SQL anterior usa credenciales internas del contenedor y no valida Secrets Manager ni la entrega de credenciales a la aplicación.
-- El output del ALB es metadata emulada y no se debe tomar como una URL pública funcional.
-- La contraseña maestra y otras capacidades de RDS en AWS siguen el comportamiento real del provider; el test local no demuestra cifrado de disco, backups, IAM, rutas o seguridad de AWS.
-
 ## Uso
 
 RDS genera y administra la contraseña maestra mediante AWS Secrets Manager. El principal de AWS usado por Terraform necesita permisos para administrar RDS y el secreto; los usuarios que consulten las credenciales necesitan permisos de lectura sobre ese secreto.
@@ -252,12 +239,7 @@ variable "private_app_subnet_cidr" {
 }
 ```
 
-## Solución de problemas
 
-### Credenciales de AWS no configuradas
-```bash
-aws sts get-caller-identity
-```
 
 ## Nota
 
