@@ -1,6 +1,15 @@
+locals {
+  resource_prefix = "${var.project_name}-${var.environment}"
+  db_identifier   = "${local.resource_prefix}-db"
+  resource_tags = merge(var.common_tags, {
+    Project     = var.project_name
+    Environment = var.environment
+  })
+}
+
 # 1. Security Group for RDS Database
 resource "aws_security_group" "rds_sg" {
-  name        = "rds_security_group"
+  name        = "${local.resource_prefix}-rds-sg"
   description = "Allow inbound traffic to RDS database from the app layer"
   vpc_id      = var.vpc_id
 
@@ -21,21 +30,25 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = {
-    Name = "rds-sg-3tier"
+    Name        = "${local.resource_prefix}-rds-sg"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
 # 2. Instance RDS MySQL
 resource "aws_db_instance" "main" {
-  identifier        = "portfolio-db-instance"
-  engine            = "mysql"
-  engine_version    = "8.0"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
+  identifier                  = local.db_identifier
+  engine                      = "mysql"
+  engine_version              = var.engine_version
+  instance_class              = var.instance_class
+  allocated_storage           = var.allocated_storage
+  storage_encrypted           = var.storage_encrypted
+  backup_retention_period     = var.backup_retention_period
+  manage_master_user_password = true
 
   db_name  = var.db_name
   username = var.db_username
-  password = var.db_password
 
   db_subnet_group_name   = var.db_subnet_group_name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
@@ -43,10 +56,15 @@ resource "aws_db_instance" "main" {
   # Security configuration
   publicly_accessible = false
   skip_final_snapshot = true
-  apply_immediately   = true
+  apply_immediately   = var.apply_immediately
 
-  tags = {
-    Name = "portfolio-rds-mysql"
+  tags = merge(local.resource_tags, { Name = local.db_identifier })
+
+  lifecycle {
+    precondition {
+      condition     = length(local.db_identifier) <= 63 && can(regex("^[a-z][a-z0-9-]*[a-z0-9]$", local.db_identifier)) && !strcontains(local.db_identifier, "--")
+      error_message = "The project/environment combination must produce a valid RDS identifier of at most 63 characters, starting with a letter and without consecutive or trailing hyphens."
+    }
   }
 }
 

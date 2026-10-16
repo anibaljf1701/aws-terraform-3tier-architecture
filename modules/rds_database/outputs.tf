@@ -8,3 +8,8 @@ output "db_port" {
   value       = aws_db_instance.main.port
 }
 
+output "db_master_user_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master credentials"
+  value       = aws_db_instance.main.master_user_secret[0].secret_arn
+}
+

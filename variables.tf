@@ -17,7 +17,7 @@ variable "environment" {
 }
 
 variable "common_tags" {
-  description = "Additional tags applied to compute resources"
+  description = "Additional tags applied to compute and database resources"
   type        = map(string)
   default     = {}
 }
@@ -58,12 +58,6 @@ variable "private_app_subnet_cidr" {
   default     = ["10.0.11.0/24", "10.0.12.0/24"]
 }
 
-variable "db_password" {
-  description = "Password for the RDS database"
-  type        = string
-  sensitive   = true
-}
-
 variable "db_name" {
   description = "Name of the RDS database"
   type        = string
@@ -74,4 +68,40 @@ variable "db_username" {
   description = "Admin username for the RDS database"
   type        = string
   default     = "admin"
+}
+
+variable "db_engine_version" {
+  description = "MySQL engine version for RDS"
+  type        = string
+  default     = "8.0"
+}
+
+variable "db_instance_class" {
+  description = "RDS DB instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "Allocated RDS storage in GiB"
+  type        = number
+  default     = 20
+}
+
+variable "db_backup_retention_days" {
+  description = "Number of days to retain automated RDS backups"
+  type        = number
+  default     = 7
+}
+
+variable "db_storage_encrypted" {
+  description = "Whether to encrypt RDS storage"
+  type        = bool
+  default     = true
+}
+
+variable "db_apply_immediately" {
+  description = "Whether to apply RDS modifications immediately"
+  type        = bool
+  default     = false
 }

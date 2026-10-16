@@ -25,11 +25,19 @@ module "compute" {
 module "database" {
   source = "./modules/rds_database"
 
-  vpc_id                = module.vpc.vpc_id
-  db_subnet_group_name  = module.vpc.db_subnet_group_name
-  app_security_group_id = module.compute.app_security_group_id
-  db_name               = var.db_name
-  db_username           = var.db_username
-  db_password           = var.db_password
+  project_name            = var.project_name
+  environment             = var.environment
+  common_tags             = var.common_tags
+  vpc_id                  = module.vpc.vpc_id
+  db_subnet_group_name    = module.vpc.db_subnet_group_name
+  app_security_group_id   = module.compute.app_security_group_id
+  db_name                 = var.db_name
+  db_username             = var.db_username
+  engine_version          = var.db_engine_version
+  instance_class          = var.db_instance_class
+  allocated_storage       = var.db_allocated_storage
+  backup_retention_period = var.db_backup_retention_days
+  storage_encrypted       = var.db_storage_encrypted
+  apply_immediately       = var.db_apply_immediately
 
 }
