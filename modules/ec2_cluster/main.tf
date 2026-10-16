@@ -96,6 +96,7 @@ resource "aws_lb_listener" "http" {
 
 # 6. Launch AMI more recently for Amazon Linux 2023
 data "aws_ami" "amazon_linux_2023" {
+  count       = var.ami_id == null ? 1 : 0
   most_recent = true
   owners      = ["amazon"]
 
@@ -108,7 +109,7 @@ data "aws_ami" "amazon_linux_2023" {
 # 7. Launch Template for EC2 instances
 resource "aws_launch_template" "app_lt" {
   name_prefix   = "${local.resource_prefix}-app-"
-  image_id      = data.aws_ami.amazon_linux_2023.id
+  image_id      = var.ami_id != null ? var.ami_id : data.aws_ami.amazon_linux_2023[0].id
   instance_type = var.instance_type
 
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
@@ -119,7 +120,7 @@ resource "aws_launch_template" "app_lt" {
   }
 
   block_device_mappings {
-    device_name = data.aws_ami.amazon_linux_2023.root_device_name
+    device_name = var.ami_id != null ? var.ami_root_device_name : data.aws_ami.amazon_linux_2023[0].root_device_name
 
     ebs {
       encrypted             = true
@@ -150,7 +151,7 @@ resource "aws_launch_template" "app_lt" {
 resource "aws_autoscaling_group" "app_asg" {
   name                      = "${local.resource_prefix}-app-asg"
   vpc_zone_identifier       = var.private_app_subnet_ids
-  target_group_arns         = [aws_lb_target_group.app_tg.arn]
+  target_group_arns         = var.attach_target_group_arns ? [aws_lb_target_group.app_tg.arn] : []
   health_check_type         = "ELB"
   health_check_grace_period = 300
 

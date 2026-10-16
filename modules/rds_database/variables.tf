@@ -67,6 +67,18 @@ variable "allocated_storage" {
   }
 }
 
+variable "max_allocated_storage" {
+  description = "Optional maximum autoscaled database storage in GiB"
+  type        = number
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.max_allocated_storage == null || var.max_allocated_storage >= var.allocated_storage
+    error_message = "max_allocated_storage must be greater than or equal to allocated_storage."
+  }
+}
+
 variable "backup_retention_period" {
   description = "Number of days to retain automated backups (0 disables automated backups)"
   type        = number

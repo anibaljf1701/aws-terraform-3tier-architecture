@@ -51,10 +51,29 @@ variable "private_app_subnet_ids" {
   }
 }
 
+variable "attach_target_group_arns" {
+  description = "Whether to associate the Auto Scaling Group with the ALB target group"
+  type        = bool
+  default     = true
+}
+
 variable "instance_type" {
   description = "EC2 instance type used by the application Auto Scaling Group"
   type        = string
   default     = "t2.micro"
+}
+
+variable "ami_id" {
+  description = "Optional AMI ID override for local emulators or custom images"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "ami_root_device_name" {
+  description = "Root device name used when ami_id is specified"
+  type        = string
+  default     = "/dev/xvda"
 }
 
 variable "min_size" {

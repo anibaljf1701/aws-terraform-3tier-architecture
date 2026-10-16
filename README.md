@@ -24,7 +24,12 @@ aws-terraform-3tier-architecture/
 ├── backend.tf              # Configuración de backend (estado Terraform)
 ├── README.md               # Documentación del proyecto
 ├── ministack/               # Imagen local del emulador AWS Ministack
-│   └── Dockerfile
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   └── terraform/           # Root module aislado para pruebas locales
+│       ├── main.tf
+│       ├── outputs.tf
+│       └── .terraform.lock.hcl
 └── modules/                # Módulos de infraestructura
     ├── vpc/                # Módulo de VPC y red
     │   ├── main.tf
@@ -42,8 +47,9 @@ aws-terraform-3tier-architecture/
 
 ## Requisitos
 
-1. Una cuenta de AWS y credenciales disponibles para el proveedor de AWS (por perfil, variables de entorno o un rol).
-2. Terraform `>= 1.5.0`.
+1. Terraform `>= 1.5.0`.
+2. Docker Engine para la prueba local con Ministack.
+3. Una cuenta de AWS y credenciales disponibles para los despliegues reales en AWS (por perfil, variables de entorno o un rol). No se necesitan para el root de prueba local.
 
 ## Variables de entrada
 
@@ -83,7 +89,114 @@ Implementa una instancia RDS MySQL 8.0 no pública y un grupo de seguridad que p
 
 El directorio `ministack/` contiene un Dockerfile derivado de la imagen oficial `ministackorg/ministack:1.5.28`. La imagen conserva el arranque del proveedor, expone el gateway en el puerto `4566` y comprueba su estado mediante `/_ministack/health`. La versión queda fijada para que las pruebas locales sean reproducibles.
 
-Ministack se utilizará para validar la integración de Terraform con las APIs emuladas y para disponer de una base MySQL real en un contenedor. No reproduce el enrutamiento real de VPC, NAT ni security groups; EC2 es metadata-only salvo que se registre una imagen de contenedor, el Auto Scaling no ejecuta políticas y las comprobaciones de salud del ALB no se ejecutan. Para que RDS levante su contenedor de base de datos, el servicio deberá recibir acceso al socket Docker en tiempo de ejecución; ese permiso no se incorpora al Dockerfile. El procedimiento de build, inicio y prueba local se documentará por separado.
+El directorio `ministack/terraform/` es un root module separado que reutiliza los módulos del proyecto, pero fija todos los endpoints del provider AWS a `http://localhost:4566` y usa credenciales ficticias. Ejecutar Terraform desde allí evita usar el provider AWS de la raíz, que apunta a AWS.
+
+### Prueba local
+
+Requisitos: Docker Engine y Terraform `>= 1.5.0`.
+
+1. Construir la imagen local:
+
+```bash
+docker build -t aws-terraform-3tier-ministack:local ./ministack
+```
+
+2. Iniciar Ministack. El montaje del socket Docker es necesario para que RDS cree el contenedor MySQL; concede al contenedor control sobre el daemon local, por lo que debe usarse solo en una máquina de desarrollo confiable.
+
+```bash
+docker run --rm -d \
+  --name portfolio-ministack-local \
+  -p 127.0.0.1:4566:4566 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e MINISTACK_RDS_PUBLIC_ENDPOINT=1 \
+  -e MINISTACK_HOST=127.0.0.1 \
+  aws-terraform-3tier-ministack:local
+```
+
+3. Esperar a que el gateway esté disponible:
+
+```bash
+curl --fail http://127.0.0.1:4566/_ministack/health
+```
+
+4. Inicializar, planificar y aplicar desde el root local aislado:
+
+```bash
+terraform -chdir=ministack/terraform init
+terraform -chdir=ministack/terraform plan
+terraform -chdir=ministack/terraform apply
+terraform -chdir=ministack/terraform output
+```
+
+5. Comprobar el MySQL real que Ministack creó. La consulta usa las credenciales dentro del contenedor, sin imprimir la contraseña:
+
+```bash
+RDS_CONTAINER=$(docker ps --filter 'name=ministack-rds-' --format '{{.Names}}' | head -n 1)
+docker exec "$RDS_CONTAINER" sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql --protocol=TCP -h127.0.0.1 -u"$MYSQL_USER" -D "$MYSQL_DATABASE" -Nse "SELECT DATABASE(), VERSION(), 1"'
+```
+
+6. Eliminar los recursos del state local y detener el emulador:
+
+```bash
+terraform -chdir=ministack/terraform destroy
+docker stop portfolio-ministack-local
+```
+
+El state y los planes Terraform locales están cubiertos por `.gitignore`; `.dockerignore` evita incluir el root de prueba, el state y los planes en el contexto de build.
+
+### Diagrama local
+
+```mermaid
+flowchart TB
+  TF["Terraform<br/>ministack/terraform"] -->|AWS API: localhost:4566| MS["Ministack<br/>API emulator"]
+
+  subgraph NETWORK["Capa de red: metadata"]
+    VPC["VPC y subredes"]
+    ROUTES["Route tables, IGW y NAT"]
+    SGS["Security groups"]
+    VPC --> ROUTES
+    VPC --> SGS
+  end
+
+  subgraph APP["Capa de aplicación"]
+    ALB["ALB y listener<br/>control plane creado"]
+    ASG["Auto Scaling Group<br/>metadata-only"]
+    EC2["EC2 / Launch Template<br/>no real VM by default"]
+    ALB -. "target group association disabled in local harness" .-> ASG
+    ASG --> EC2
+  end
+
+  subgraph DATA["Capa de datos"]
+    RDS["RDS API resource"]
+    MYSQL["MySQL 8.0 container<br/>real SQL data plane"]
+    RDS --> MYSQL
+  end
+
+  MS --> NETWORK
+  MS --> APP
+  MS --> RDS
+  EC2 -. "application traffic not exercised" .-> MYSQL
+
+  classDef emulator fill:#e8f1fb,stroke:#376a9f,color:#172b3d
+  classDef metadata fill:#fff3cd,stroke:#9a7412,color:#3d3215
+  classDef real fill:#e4f3e8,stroke:#3b7b4b,color:#173820
+  class MS,TF emulator
+  class VPC,ROUTES,SGS,ALB,ASG,EC2 metadata
+  class MYSQL real
+```
+
+### Resultado observado
+
+En la ejecución local de referencia, el state llegó a contener 29 recursos y el apply final informó `No changes` (`0 added, 0 changed, 0 destroyed`). Incluye VPC, subredes, tablas y asociaciones de rutas, security groups, ALB/target group/listener, launch template, ASG, política de escalado, DB subnet group y RDS. El endpoint informado fue `127.0.0.1:15432`, cuyo puerto TCP aceptó conexiones; la consulta al contenedor MySQL devolvió `localdb`, versión `8.0.46` y `1`.
+
+### Salvedades de la emulación
+
+- La VPC, subredes, NAT, rutas y security groups son recursos de control plane: Ministack no enruta paquetes ni hace cumplir las reglas de red.
+- EC2 y el ASG son metadata-only en esta configuración. Se usa `ami-00000001` solo para que el Launch Template pueda crearse; no se inicia una VM ni se ejecuta el user data.
+- El Auto Scaling API de Ministack no implementa `AttachLoadBalancerTargetGroups`; por eso `attach_target_group_arns = false` solo en el harness local. El ALB y el listener se crean, pero no hay target registrado ni flujo ALB→EC2 que probar. No se validó una respuesta HTTP funcional del ALB. Las comprobaciones de salud no se ejecutan y las políticas de escalado quedan almacenadas, no disparadas.
+- RDS sí inicia un MySQL real, pero Ministack no devolvió `master_user_secret` al usar `manage_master_user_password = true`; por eso el ARN del secreto no aparece en los outputs locales. La prueba SQL anterior usa credenciales internas del contenedor y no valida Secrets Manager ni la entrega de credenciales a la aplicación.
+- El output del ALB es metadata emulada y no se debe tomar como una URL pública funcional.
+- La contraseña maestra y otras capacidades de RDS en AWS siguen el comportamiento real del provider; el test local no demuestra cifrado de disco, backups, IAM, rutas o seguridad de AWS.
 
 ## Uso
 
