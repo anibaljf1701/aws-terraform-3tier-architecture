@@ -105,3 +105,21 @@ variable "db_apply_immediately" {
   type        = bool
   default     = false
 }
+
+variable "enable_https" {
+  description = "Whether to enable HTTPS on the ALB; requires an existing ACM certificate ARN"
+  type        = bool
+  default     = false
+}
+
+variable "acm_certificate_arn" {
+  description = "ARN of an existing ACM certificate in the ALB region; required when enable_https is true"
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.acm_certificate_arn == null || var.acm_certificate_arn == "" || can(regex("^arn:[^:]+:acm:[^:]+:[0-9]{12}:certificate/.+$", var.acm_certificate_arn))
+    error_message = "acm_certificate_arn must be a valid ACM certificate ARN or null."
+  }
+}

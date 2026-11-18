@@ -73,6 +73,8 @@ aws-terraform-3tier-architecture/
 | `db_backup_retention_days` | Días de retención de backups automáticos | `number` | `7` |
 | `db_storage_encrypted` | Activa el cifrado del almacenamiento RDS | `bool` | `true` |
 | `db_apply_immediately` | Aplica inmediatamente modificaciones de RDS | `bool` | `false` |
+| `enable_https` | Habilita el listener HTTPS en el ALB y redirige HTTP a HTTPS | `bool` | `false` |
+| `acm_certificate_arn` | ARN de un certificado ACM existente para habilitar HTTPS | `string` | `null` |
 
 ## Módulos
 
@@ -80,7 +82,7 @@ aws-terraform-3tier-architecture/
 Crea la VPC, subredes públicas y privadas en dos zonas, gateways, tablas de rutas y el grupo de subredes de RDS.
 
 ### 2. Módulo EC2 Cluster (`modules/ec2_cluster`)
-Implementa el ALB, sus reglas de acceso, un Auto Scaling Group con escalado por CPU y salud integrada con el ALB, y las instancias EC2 con Amazon Linux 2023 y Apache HTTP. El módulo acepta parámetros para proyecto, entorno, tags, tipo de instancia y capacidad.
+Implementa el ALB, sus reglas de acceso, el listener HTTP/HTTPS parametrizado, un Auto Scaling Group con escalado por CPU y salud integrada con el ALB, y las instancias EC2 con Amazon Linux 2023 y Apache HTTP. El módulo acepta parámetros para proyecto, entorno, tags, tipo de instancia, capacidad y certificados HTTPS.
 
 ### 3. Módulo RDS Database (`modules/rds_database`)
 Implementa una instancia RDS MySQL 8.0 no pública y un grupo de seguridad que permite conexiones desde el grupo de seguridad de la capa de aplicación.
@@ -219,7 +221,7 @@ terraform destroy
 
 ## Acceso y conectividad
 
-El ALB acepta tráfico HTTP por el puerto 80 y las instancias EC2 reciben tráfico HTTP solo desde el grupo de seguridad del ALB. Para mantener este template simple, la salida de los security groups del ALB y de EC2 permite todos los destinos; en un despliegue con destinos definidos, restringe esas reglas al mínimo necesario. La base de datos acepta conexiones MySQL desde el grupo de seguridad de EC2. AWS Secrets Manager administra la contraseña maestra de RDS; Terraform no recibe su valor. El estado local sigue conteniendo metadatos de infraestructura y debe protegerse; para uso compartido, configura un backend remoto con cifrado y controles de acceso.
+Por defecto, el ALB acepta tráfico HTTP por el puerto 80 y las instancias EC2 reciben tráfico HTTP solo desde el grupo de seguridad del ALB. Si `enable_https` está activado, el puerto 80 redirige a HTTPS en el puerto 443 y el listener HTTPS utiliza el certificado definido en `acm_certificate_arn`. Para mantener este template simple, la salida de los security groups del ALB y de EC2 permite todos los destinos; en un despliegue con destinos definidos, restringe esas reglas al mínimo necesario. La base de datos acepta conexiones MySQL desde el grupo de seguridad de EC2. AWS Secrets Manager administra la contraseña maestra de RDS; Terraform no recibe su valor. El estado local sigue conteniendo metadatos de infraestructura y debe protegerse; para uso compartido, configura un backend remoto con cifrado y controles de acceso.
 
 ## Costos
 
@@ -229,18 +231,8 @@ El coste depende de la región, el tiempo de ejecución, el tráfico y los preci
 
 Para cambiar la región, define `aws_region` en un archivo de variables local o mediante `TF_VAR_aws_region`.
 
-Para ajustar el tipo de instancia EC2, define `instance_type`. Los valores de escalado de la aplicación se configuran con `asg_min_size`, `asg_desired_capacity`, `asg_max_size` y `asg_cpu_target_value`. Para RDS, define `db_engine_version`, `db_instance_class`, `db_allocated_storage`, `db_backup_retention_days`, `db_storage_encrypted` y `db_apply_immediately`.
-
-Si agregas subredes de aplicación, actualiza también las zonas de disponibilidad en `modules/vpc/variables.tf` para que ambas listas tengan la misma longitud.
-
-```hcl
-variable "private_app_subnet_cidr" {
-  default = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
-}
-```
-
-
+Para ajustar el tipo de instancia EC2, define `instance_type`. Los valores de escalado de la aplicación se configuran con `asg_min_size`, `asg_desired_capacity`, `asg_max_size` y `asg_cpu_target_value`. Para RDS, define `db_engine_version`, `db_instance_class`, `db_allocated_storage`, `db_backup_retention_days`, `db_storage_encrypted` y `db_apply_immediately`. Para HTTPS, habilita `enable_https` y proporciona el ARN de un certificado ACM existente mediante `acm_certificate_arn`.
 
 ## Nota
 
-Este repositorio es un template demostrativo. La configuración conserva `skip_final_snapshot = true`: al destruir RDS, la instancia y sus datos se eliminan sin crear un snapshot final. Haz una copia independiente de cualquier dato que necesites conservar. Antes de aplicar estos cambios sobre una instancia existente, revisa el plan: cambiar su identificador o habilitar cifrado en una instancia previamente no cifrada puede implicar reemplazo o migración. Antes de utilizarlo en un entorno productivo, configura HTTPS en el ALB con un certificado ACM y redirige HTTP a HTTPS. Revisa también los requisitos de disponibilidad, copias de seguridad, monitoreo y acceso de la aplicación. La configuración actual usa un único NAT Gateway y no habilita RDS Multi-AZ; los costes reales dependen del uso y de los precios vigentes de AWS.
+Este repositorio es un template demostrativo. La configuración conserva `skip_final_snapshot = true`: al destruir RDS, la instancia y sus datos se eliminan sin crear un snapshot final. Haz una copia independiente de cualquier dato que necesites conservar. Antes de aplicar estos cambios sobre una instancia existente, revisa el plan: cambiar su identificador o habilitar cifrado en una instancia previamente no cifrada puede implicar reemplazo o migración. Para un entorno productivo, habilita `enable_https` y usa un certificado ACM válido en la misma región; también revisa el DNS y el certificado configurados para el dominio.

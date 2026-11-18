@@ -1,6 +1,6 @@
 output "application_url" {
-  description = "The URL of the application"
-  value       = "http://${module.compute.alb_dns_name}"
+  description = "The HTTP or HTTPS URL of the application"
+  value       = "${var.enable_https ? "https" : "http"}://${module.compute.alb_dns_name}"
 }
 
 output "database_endpoint" {

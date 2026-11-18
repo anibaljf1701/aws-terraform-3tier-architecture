@@ -19,6 +19,8 @@ module "compute" {
   desired_capacity       = var.asg_desired_capacity
   max_size               = var.asg_max_size
   cpu_target_value       = var.asg_cpu_target_value
+  enable_https           = var.enable_https
+  acm_certificate_arn    = var.acm_certificate_arn
 }
 
 # 3. Module of database (Depend on the network module)

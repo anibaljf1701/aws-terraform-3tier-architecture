@@ -6,7 +6,7 @@ resource "aws_vpc" "main" {
   tags = {
     Name = "vpc-3tier-portfolio"
   }
-} 
+}
 
 # 2. Internet Gateway (for public layer)
 resource "aws_internet_gateway" "igw" {
@@ -61,7 +61,7 @@ resource "aws_db_subnet_group" "db" {
 
 # 7. NAT Gateway and Elastic IP (For instance EC2 have access to the Internet. Example: for downloading updates)
 resource "aws_eip" "nat" {
-    domain = "vpc"
+  domain = "vpc"
 }
 
 resource "aws_nat_gateway" "nat_gw" {

@@ -19,6 +19,17 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  dynamic "ingress" {
+    for_each = var.enable_https ? [1] : []
+
+    content {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -82,19 +93,53 @@ resource "aws_lb_target_group" "app_tg" {
   tags = merge(local.resource_tags, { Name = "${local.resource_prefix}-app-tg" })
 }
 
-# 5. Listener (ALB listen to traffic)
+# 5. HTTP listener: redirect to HTTPS when enabled, otherwise forward to the application
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app_alb.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg.arn
+    type = var.enable_https ? "redirect" : "forward"
+
+    dynamic "redirect" {
+      for_each = var.enable_https ? [1] : []
+
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    target_group_arn = var.enable_https ? null : aws_lb_target_group.app_tg.arn
   }
 }
 
-# 6. Launch AMI more recently for Amazon Linux 2023
+# 6. HTTPS listener; created only when an existing ACM certificate ARN is supplied
+resource "aws_lb_listener" "https" {
+  count = var.enable_https ? 1 : 0
+
+  load_balancer_arn = aws_lb.app_alb.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.acm_certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_tg.arn
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.acm_certificate_arn != null && var.acm_certificate_arn != ""
+      error_message = "acm_certificate_arn must be set when enable_https is true. Create or import an ACM certificate first."
+    }
+  }
+}
+
+# 7. Launch AMI more recently for Amazon Linux 2023
 data "aws_ami" "amazon_linux_2023" {
   count       = var.ami_id == null ? 1 : 0
   most_recent = true
@@ -106,7 +151,7 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
-# 7. Launch Template for EC2 instances
+# 8. Launch Template for EC2 instances
 resource "aws_launch_template" "app_lt" {
   name_prefix   = "${local.resource_prefix}-app-"
   image_id      = var.ami_id != null ? var.ami_id : data.aws_ami.amazon_linux_2023[0].id
@@ -120,7 +165,7 @@ resource "aws_launch_template" "app_lt" {
   }
 
   block_device_mappings {
-    device_name = var.ami_id != null ? var.ami_root_device_name : data.aws_ami.amazon_linux_2023[0].root_device_name
+    device_name = var.ami_id != null ? var.ami_id : data.aws_ami.amazon_linux_2023[0].root_device_name
 
     ebs {
       encrypted             = true
@@ -147,7 +192,7 @@ resource "aws_launch_template" "app_lt" {
   }
 }
 
-# 8. Auto Scaling Group (ASG)
+# 9. Auto Scaling Group (ASG)
 resource "aws_autoscaling_group" "app_asg" {
   name                      = "${local.resource_prefix}-app-asg"
   vpc_zone_identifier       = var.private_app_subnet_ids
